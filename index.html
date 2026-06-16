@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>뮤지엄 샵 판매 분석 대시보드</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #F7F6F2;
+    --surface:   #FFFFFF;
+    --border:    #E4E2DA;
+    --text:      #1A1917;
+    --muted:     #706E68;
+    --accent:    #2C5F8A;
+    --accent-bg: #EBF2F8;
+    --danger:    #A32D2D;
+    --danger-bg: #FCEBEB;
+    --safe:      #3B6D11;
+    --safe-bg:   #EAF3DE;
+    --warn:      #854F0B;
+    --warn-bg:   #FAEEDA;
+    --c01-bg:    #EEEDFE; --c01:    #3C3489;
+    --c02-bg:    #E1F5EE; --c02:    #085041;
+    --c03-bg:    #FAECE7; --c03:    #712B13;
+    --c04-bg:    #F1EFE8; --c04:    #444441;
+    --radius:    8px;
+    --radius-lg: 12px;
+    font-size: 14px;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; min-height: 100vh; }
+
+  /* Layout */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 2rem; height: 56px; position: sticky; top: 0; z-index: 100; }
+  header h1 { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; flex-shrink: 0; }
+  .main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+  .tab { padding: 10px 20px; font-size: 13px; font-weight: 400; color: var(--muted); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+  .tab.active { color: var(--text); font-weight: 500; border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Metrics */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+  .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .metric-value { font-size: 24px; font-weight: 500; color: var(--text); }
+  .metric-value.danger { color: var(--danger); }
+  .metric-value.safe   { color: var(--safe); }
+
+  /* Filter bar */
+  .filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .filter-bar label { font-size: 12px; color: var(--muted); }
+  select { font-size: 13px; padding: 5px 10px; height: 32px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+  select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* Table */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th { font-size: 11px; font-weight: 500; color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); background: #FAFAF8; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAFAF8; }
+
+  /* Badges & chips */
+  .badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .badge-danger  { background: var(--danger-bg); color: var(--danger); }
+  .badge-safe    { background: var(--safe-bg);   color: var(--safe);   }
+  .badge-warn    { background: var(--warn-bg);    color: var(--warn);   }
+  .badge-neutral { background: var(--bg);         color: var(--muted);  }
+  .chip { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .c01 { background: var(--c01-bg); color: var(--c01); }
+  .c02 { background: var(--c02-bg); color: var(--c02); }
+  .c03 { background: var(--c03-bg); color: var(--c03); }
+  .c04 { background: var(--c04-bg); color: var(--c04); }
+
+  /* Toggle */
+  .toggle-wrap { display: flex; justify-content: center; }
+  .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #D1CFC7; border-radius: 20px; transition: .2s; }
+  .slider::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #1D9E75; }
+  input:checked + .slider::before { transform: translateX(16px); }
+
+  /* Best panel */
+  .best-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  .best-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .best-card-hd { padding: 10px 14px; background: #FAFAF8; border-bottom: 1px solid var(--border); }
+  .best-card-title { font-size: 13px; font-weight: 500; }
+  .best-card-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .best-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  .best-item:last-child { border-bottom: none; }
+  .rank { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .rank-1 { background: #FAEEDA; color: #854F0B; }
+  .rank-2 { background: #E8E6E0; color: #5F5E5A; }
+  .rank-3 { background: #F5C4B3; color: #993C1D; }
+  .best-name { flex: 1; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .best-qty  { font-size: 12px; font-weight: 500; color: var(--muted); flex-shrink: 0; }
+  .cat-tabs  { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .cat-tab   { padding: 5px 14px; font-size: 12px; border: 1px solid var(--border); border-radius: 99px; cursor: pointer; background: var(--surface); color: var(--muted); transition: .15s; }
+  .cat-tab.active { background: var(--text); color: var(--surface); border-color: var(--text); }
+
+  /* Settings */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .settings-section h3 { font-size: 13px; font-weight: 500; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .settings-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .settings-row  { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .name { flex: 1; color: var(--text); }
+  .add-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .add-row input { flex: 1; min-width: 120px; font-size: 13px; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .add-row input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.btn { padding: 6px 14px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; background: var(--surface); color: var(--text); transition: background .12s; }
+  button.btn:hover { background: var(--bg); }
+  button.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.btn-primary:hover { opacity: .88; }
+  button.btn-del { color: var(--danger); border-color: transparent; padding: 4px 8px; font-size: 12px; }
+  button.btn-del:hover { background: var(--danger-bg); }
+
+  /* Week selector */
+  .week-row { display: flex; gap: 8px; align-items: center; margin-bottom: 1.25rem; }
+  .week-row input[type=date] { font-size: 13px; padding: 5px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .week-row span { font-size: 13px; color: var(--muted); }
+
+  /* Banner */
+  .banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--accent-bg); border: 1px solid #C5D9EC; border-radius: var(--radius); margin-bottom: 1.5rem; font-size: 12px; color: var(--accent); }
+
+  /* Loading */
+  .loading { padding: 3rem; text-align: center; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 700px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .best-grid    { grid-template-columns: 1fr; }
+    .settings-grid{ grid-template-columns: 1fr; }
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-dot"></div>
+  <h1>뮤지엄 샵 판매 분석</h1>
+  <span style="font-size:12px; color:var(--muted); margin-left:auto" id="last-updated"></span>
+</header>
+
+<main class="main">
+  <div class="tab-bar">
+    <button class="tab active" onclick="showTab('inventory')">장기부진재고</button>
+    <button class="tab" onclick="showTab('best')">주간 베스트</button>
+    <button class="tab" onclick="showTab('settings')">카테고리 관리</button>
+  </div>
+
+  <!-- ── 장기부진재고 ─────────────────────────────── -->
+  <div id="panel-inventory" class="panel active">
+    <div class="banner">
+      ℹ️  Google Sheets와 연동되어 있어요. 시트를 업데이트하면 새로고침 시 자동 반영됩니다.
+      <button class="btn" style="margin-left:auto; font-size:12px" onclick="loadSheets()">새로고침</button>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-label">총 품목 수</div><div class="metric-value" id="m-total">—</div></div>
+      <div class="metric"><div class="metric-label">총 수량</div><div class="metric-value" id="m-qty">—</div></div>
+      <div class="metric"><div class="metric-label">위험도 높음</div><div class="metric-value danger" id="m-high">—</div></div>
+      <div class="metric"><div class="metric-label">위험도 낮음</div><div class="metric-value safe"   id="m-low">—</div></div>
+    </div>
+    <div class="filter-bar">
+      <label>대분류</label>
+      <select id="f-main" onchange="renderInventory()">
+        <option value="">전체</option>
+        <option value="01">01 전시연계</option>
+        <option value="02">02 MI상품</option>
+        <option value="03">03 공예품</option>
+        <option value="04">04 기타</option>
+      </select>
+      <label>세부분류</label>
+      <select id="f-cat" onchange="renderInventory()">
+        <option value="">전체</option>
+        <option value="청자">청자</option>
+        <option value="분청">분청</option>
+        <option value="백자">백자</option>
+      </select>
+      <label>위험도</label>
+      <select id="f-risk" onchange="renderInventory()">
+        <option value="">전체</option>
+        <option value="high">높음</option>
+        <option value="low">낮음</option>
+        <option value="none">미확인</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col style="width:110px"><col style="width:130px"><col style="width:72px"><col style="width:auto"><col style="width:50px">
+          <col style="width:96px"><col style="width:96px"><col style="width:90px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>대분류</th><th>상품코드</th><th>세부분류</th><th>품목명</th>
+            <th style="text-align:center">수량</th>
+            <th style="text-align:center">오프라인 진열</th>
+            <th style="text-align:center">온라인 진열</th>
+            <th style="text-align:center">위험도</th>
+          </tr>
+        </thead>
+        <tbody id="inv-body"><tr><td colspan="8" class="loading">데이터 불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── 주간 베스트 ────────────────────────────────── -->
+  <div id="panel-best" class="panel">
+    <div class="week-row">
+      <span>분석 기간</span>
+      <input type="date" id="w-start" value="2026-04-27">
+      <span>~</span>
+      <input type="date" id="w-end" value="2026-05-03">
+      <button class="btn" onclick="renderBest()">적용</button>
+    </div>
+    <div class="cat-tabs">
+      <button class="cat-tab active" onclick="selectCat('all',this)">전체</button>
+      <button class="cat-tab" onclick="selectCat('exhibit',this)">01 전시연계</button>
+      <button class="cat-tab" onclick="selectCat('mi',this)">02 MI상품</button>
+      <button class="cat-tab" onclick="selectCat('craft',this)">03 공예품</button>
+      <button class="cat-tab" onclick="selectCat('etc',this)">04 기타</button>
+    </div>
+    <div class="best-grid" id="best-grid"></div>
+  </div>
+
+  <!-- ── 카테고리 관리 ──────────────────────────────── -->
+  <div id="panel-settings" class="panel">
+    <div class="settings-grid">
+      <div class="settings-section">
+        <h3><span class="chip c03">03 공예품</span> 세부 분류</h3>
+        <div class="settings-list" id="craft-list"></div>
+        <div class="add-row">
+          <input type="text" id="new-craft" placeholder="세부 분류명 (예: 옻칠공예)">
+          <button class="btn btn-primary" onclick="addCraft()">추가</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3><span class="chip c02">02 MI상품</span> 구분</h3>
+        <div class="settings-list">
+          <div class="settings-row"><span class="name">리움</span><span class="badge badge-neutral">MI상품</span></div>
+          <div class="settings-row"><span class="name">호암</span><span class="badge badge-neutral">MI상품</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3><span class="chip c01">01 전시연계</span> 전시 목록</h3>
+      <div class="settings-list" id="exhibit-list"></div>
+      <div class="add-row">
+        <input type="text" id="new-exhibit" placeholder="전시명 (예: 정선)" style="flex:2">
+        <input type="date" id="ex-start">
+        <input type="date" id="ex-end">
+        <button class="btn btn-primary" onclick="addExhibit()">추가</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// ★ 여기에 Google Sheets CSV URL을 입력하세요 ★
+// 방법: Google Sheets → 파일 → 웹에 게시 → CSV → URL 복사
+// ──────────────────────────────────────────────────────────────
+const SHEET_URL = "여기에_구글시트_CSV_URL_붙여넣기";
+
+// Sheets 컬럼 순서 (0부터 시작)
+// 시트 컬럼: A=대분류코드, B=상품코드, C=세부분류, D=품목명, E=수량
+const COL = { mainCat:0, code:1, cat:2, name:3, qty:4 };
+
+const CATS = {
+  "01":{ label:"01 전시연계", cls:"c01" },
+  "02":{ label:"02 MI상품",   cls:"c02" },
+  "03":{ label:"03 공예품",   cls:"c03" },
+  "04":{ label:"04 기타",     cls:"c04" },
+};
+
+// 내장 데이터 (Sheets 연동 전 fallback)
+let inventoryData = [
+  { mainCat:"03", code:"11-001-001", cat:"청자", name:"청자진사주자A",         qty:5  },
+  { mainCat:"03", code:"11-001-005", cat:"청자", name:"청자죽절문주병",         qty:18 },
+  { mainCat:"03", code:"11-001-010", cat:"청자", name:"청자운학문매병A",        qty:2  },
+  { mainCat:"03", code:"11-001-017", cat:"청자", name:"청자운학문장경병",       qty:6  },
+  { mainCat:"03", code:"11-001-019", cat:"청자", name:"청자보상당초문화병",     qty:25 },
+  { mainCat:"03", code:"11-001-020", cat:"청자", name:"청자과형병",             qty:8  },
+  { mainCat:"03", code:"11-001-023", cat:"청자", name:"청자국모란주전자",       qty:1  },
+  { mainCat:"03", code:"11-001-027", cat:"청자", name:"청자오리형연적",         qty:5  },
+  { mainCat:"03", code:"11-001-043", cat:"청자", name:"신)청자모란문각병",      qty:2  },
+  { mainCat:"03", code:"11-001-045", cat:"청자", name:"신)청자광구병",          qty:5  },
+  { mainCat:"03", code:"11-001-069", cat:"청자", name:"청자죽절문주병B",        qty:1  },
+  { mainCat:"03", code:"11-001-098", cat:"청자", name:"청자진사연화문잔세트",   qty:3  },
+  { mainCat:"03", code:"11-002-012", cat:"청자", name:"송월)청자병D",           qty:1  },
+  { mainCat:"03", code:"11-002-073", cat:"청자", name:"송월)미니죽절문주병",    qty:29 },
+  { mainCat:"03", code:"11-002-077", cat:"청자", name:"송월)미니모란문매병",    qty:1  },
+  { mainCat:"03", code:"11-002-078", cat:"청자", name:"송월)미니모란문주병",    qty:2  },
+  { mainCat:"03", code:"11-002-081", cat:"청자", name:"송월)미니진사목단매병",  qty:1  },
+  { mainCat:"03", code:"11-002-082", cat:"청자", name:"송월)미니진사목단주병",  qty:5  },
+  { mainCat:"03", code:"11-003-004", cat:"청자", name:"해강요작품D",            qty:2  },
+  { mainCat:"03", code:"11-004-111", cat:"청자", name:"동국)청자진사주자",      qty:1  },
+  { mainCat:"03", code:"12-001-013", cat:"분청", name:"분청사기상감어룡문매병", qty:12 },
+  { mainCat:"03", code:"12-002-012", cat:"분청", name:"미니)분청철화초화문병",  qty:19 },
+  { mainCat:"03", code:"13-001-001", cat:"백자", name:"청화백자매죽문대호A",    qty:5  },
+  { mainCat:"03", code:"13-001-002", cat:"백자", name:"청화백자매죽문대호B",    qty:3  },
+  { mainCat:"03", code:"13-001-012", cat:"백자", name:"청화백자매조문개호",     qty:6  },
+  { mainCat:"03", code:"13-001-020", cat:"백자", name:"청화백자산수문떡메병B",  qty:4  },
+  { mainCat:"03", code:"13-001-053", cat:"백자", name:"개구리향꽂이",           qty:1  },
+  { mainCat:"03", code:"13-008-024", cat:"백자", name:"백자투각연환문필통",     qty:2  },
+];
+
+const displayState = {};
+inventoryData.forEach(d => { displayState[d.code] = { offline:false, online:false }; });
+
+const salesData = {
+  lium:  [{name:"쇼핑백1000",qty:109},{name:"백자전)모란문병손수건부채세트",qty:84},{name:"호작)엽서",qty:68},{name:"신화접도손수건부채세트",qty:63},{name:"호작)뱃지",qty:56}],
+  hoam:  [{name:"김윤신)엽서",qty:103},{name:"쇼핑백1000",qty:60},{name:"김윤신)나무자석",qty:40},{name:"공작)핀버튼",qty:36},{name:"정선)종이부채",qty:23}],
+  craft: [{name:"굿럭피쉬오리지널",qty:9},{name:"Shot cup set",qty:8},{name:"GoodLuckFish(B)",qty:5},{name:"서신정)채상원형접시(중)",qty:4},{name:"나전단청문찻잔세트",qty:4}],
+};
+
+// ── Sheets CSV 로드 ──────────────────────────────────────────
+async function loadSheets() {
+  if (SHEET_URL.startsWith("여기에")) return; // URL 미설정 시 skip
+  try {
+    const res  = await fetch(SHEET_URL);
+    const text = await res.text();
+    const rows = text.trim().split("\n").slice(1); // 헤더 제외
+    const parsed = rows.map(r => {
+      const c = r.split(",").map(s => s.trim().replace(/^"|"$/g,""));
+      return { mainCat: c[COL.mainCat], code: c[COL.code], cat: c[COL.cat], name: c[COL.name], qty: parseInt(c[COL.qty])||0 };
+    }).filter(d => d.code);
+    if (parsed.length) {
+      inventoryData = parsed;
+      parsed.forEach(d => { if (!displayState[d.code]) displayState[d.code] = { offline:false, online:false }; });
+      document.getElementById("last-updated").textContent = "업데이트: " + new Date().toLocaleTimeString("ko-KR");
+    }
+  } catch(e) { console.warn("Sheets 로드 실패, 내장 데이터 사용:", e); }
+  renderInventory();
+}
+
+// ── Inventory ────────────────────────────────────────────────
+function getRisk(code) {
+  const s = displayState[code];
+  if (!s || (!s.offline && !s.online)) return "none";
+  return "high";
+}
+
+function renderInventory() {
+  const mf = document.getElementById("f-main").value;
+  const cf = document.getElementById("f-cat").value;
+  const rf = document.getElementById("f-risk").value;
+
+  const items = inventoryData.filter(d => {
+    if (mf && d.mainCat !== mf) return false;
+    if (cf && d.cat     !== cf) return false;
+    const r = getRisk(d.code);
+    if (rf === "high" && r !== "high") return false;
+    if (rf === "low"  && r !== "low")  return false;
+    if (rf === "none" && r !== "none") return false;
+    return true;
+  });
+
+  let high = 0, low = 0, totalQty = 0;
+  inventoryData.forEach(d => {
+    const r = getRisk(d.code);
+    if (r === "high") high++;
+    if (r === "low")  low++;
+    totalQty += d.qty;
+  });
+  document.getElementById("m-total").textContent = inventoryData.length;
+  document.getElementById("m-qty").textContent   = totalQty;
+  document.getElementById("m-high").textContent  = high;
+  document.getElementById("m-low").textContent   = low;
+
+  const mc = CATS;
+  document.getElementById("inv-body").innerHTML = items.map(d => {
+    const risk  = getRisk(d.code);
+    const cat   = mc[d.mainCat] || { label: d.mainCat, cls:"c04" };
+    const badge = risk === "high"
+      ? `<span class="badge badge-danger">높음</span>`
+      : risk === "low"
+      ? `<span class="badge badge-safe">낮음</span>`
+      : `<span class="badge badge-warn">미확인</span>`;
+    const tog = key => {
+      const checked = (displayState[d.code]||{})[key] ? "checked" : "";
+      return `<div class="toggle-wrap"><label class="toggle"><input type="checkbox" ${checked} onchange="tog('${d.code}','${key}',this.checked)"><span class="slider"></span></label></div>`;
+    };
+    return `<tr>
+      <td><span class="chip ${cat.cls}">${cat.label}</span></td>
+      <td style="font-family:monospace; font-size:11px; color:var(--muted)">${d.code}</td>
+      <td><span class="badge badge-neutral">${d.cat}</span></td>
+      <td>${d.name}</td>
+      <td style="text-align:center; font-weight:500">${d.qty}</td>
+      <td>${tog("offline")}</td>
+      <td>${tog("online")}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="loading">표시할 항목이 없습니다.</td></tr>`;
+}
+
+function tog(code, key, val) {
+  if (!displayState[code]) displayState[code] = { offline:false, online:false };
+  displayState[code][key] = val;
+  renderInventory();
+}
+
+// ── Best ─────────────────────────────────────────────────────
+let activeCat = "all";
+function selectCat(cat, el) {
+  activeCat = cat;
+  document.querySelectorAll(".cat-tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  renderBest();
+}
+
+function renderBest() {
+  const period = `${document.getElementById("w-start").value} ~ ${document.getElementById("w-end").value}`;
+  const secs = [];
+  if (activeCat==="all"||activeCat==="mi") {
+    secs.push({ title:"02 MI상품", sub:"리움 · "+period, data:salesData.lium,  cls:"c02" });
+    secs.push({ title:"02 MI상품", sub:"호암 · "+period, data:salesData.hoam,  cls:"c02" });
+  }
+  if (activeCat==="all"||activeCat==="craft") {
+    secs.push({ title:"03 공예품", sub:period,            data:salesData.craft, cls:"c03" });
+  }
+  if (activeCat==="exhibit") {
+    secs.push({ title:"01 전시연계", sub:"정선 · "+period, data:salesData.hoam.filter(d=>d.name.includes("정선")), cls:"c01" });
+    secs.push({ title:"01 전시연계", sub:"김윤신 · "+period, data:salesData.hoam.filter(d=>d.name.includes("김윤신")||d.name.includes("공작")), cls:"c01" });
+  }
+  const grid = document.getElementById("best-grid");
+  if (!secs.length) { grid.innerHTML=`<p style="color:var(--muted);font-size:13px">데이터를 추가해주세요.</p>`; return; }
+  grid.style.gridTemplateColumns = secs.length===1 ? "1fr" : "repeat(2,1fr)";
+  grid.innerHTML = secs.map(s => `
+    <div class="best-card">
+      <div class="best-card-hd">
+        <div class="best-card-title"><span class="chip ${s.cls}" style="margin-right:6px">${s.title}</span></div>
+        <div class="best-card-sub">${s.sub}</div>
+      </div>
+      ${s.data.slice(0,3).map((d,i)=>`
+        <div class="best-item">
+          <div class="rank rank-${i+1}">${i+1}</div>
+          <div class="best-name" title="${d.name}">${d.name}</div>
+          <div class="best-qty">${d.qty}개</div>
+        </div>`).join("")||`<div class="loading">판매 데이터 없음</div>`}
+    </div>`).join("");
+}
+
+// ── Settings ─────────────────────────────────────────────────
+let craftSubs = ["목공예품","금속공예품","도자공예품","섬유공예품","나전공예품"];
+let exhibits  = [
+  { name:"정선",          start:"2025-01-01", end:"2025-06-30" },
+  { name:"김윤신",        start:"2025-03-15", end:"2025-07-31" },
+  { name:"루이즈 부르주아", start:"2025-04-10", end:"2025-08-31" },
+];
+
+function renderCraftList() {
+  document.getElementById("craft-list").innerHTML = craftSubs.map((c,i) =>
+    `<div class="settings-row"><span class="name">${c}</span><span class="badge badge-neutral">공예품</span>
+     <button class="btn btn-del" onclick="deleteCraft(${i})">삭제</button></div>`
+  ).join("");
+}
+function addCraft() {
+  const v = document.getElementById("new-craft").value.trim();
+  if (!v) return;
+  craftSubs.push(v); document.getElementById("new-craft").value=""; renderCraftList();
+}
+function deleteCraft(i) { craftSubs.splice(i,1); renderCraftList(); }
+
+function renderExhibitList() {
+  document.getElementById("exhibit-list").innerHTML = exhibits.map((e,i) =>
+    `<div class="settings-row"><span class="name">${e.name}</span>
+     <span style="font-size:11px;color:var(--muted)">${e.start} ~ ${e.end}</span>
+     <button class="btn btn-del" onclick="deleteExhibit(${i})">삭제</button></div>`
+  ).join("");
+}
+function addExhibit() {
+  const name = document.getElementById("new-exhibit").value.trim();
+  const s    = document.getElementById("ex-start").value;
+  const e    = document.getElementById("ex-end").value;
+  if (!name) return;
+  exhibits.push({ name, start:s||"미정", end:e||"미정" });
+  document.getElementById("new-exhibit").value="";
+  renderExhibitList();
+}
+function deleteExhibit(i) { exhibits.splice(i,1); renderExhibitList(); }
+
+// ── Tab ──────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach((t,i) =>
+    t.classList.toggle("active", ["inventory","best","settings"][i]===name));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-"+name).classList.add("active");
+  if (name==="best") renderBest();
+}
+
+// ── Init ─────────────────────────────────────────────────────
+loadSheets();
+renderCraftList();
+renderExhibitList();
+</script>
+</body>
+</html>
